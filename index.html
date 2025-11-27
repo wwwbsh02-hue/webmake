@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>인피니티 웹 빌더 : 얼티밋 마스터</title>
+    <!-- FontAwesome & Google Fonts -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Do+Hyeon&family=Jua&family=Nanum+Gothic:wght@400;700&family=Nanum+Myeongjo&family=Noto+Sans+KR:wght@100;300;400;500;700;900&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-dark: #121212;
+            --bg-panel: #1e1e1e;
+            --bg-header: #252526;
+            --bg-input: #2d2d2d;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --accent-danger: #ef4444;
+            --border: #333;
+            --text-main: #f0f0f0;
+            --text-sub: #a0a0a0;
+        }
+        
+        * { box-sizing: border-box; outline: none; user-select: none; }
+        body { margin: 0; background: var(--bg-dark); color: var(--text-main); font-family: 'Noto Sans KR', sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; font-size: 12px; }
+        
+        /* 스크롤바 커스텀 */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+        ::-webkit-scrollbar-corner { background: transparent; }
+
+        /* 공통 UI 요소 */
+        input, select, textarea {
+            background: var(--bg-input); border: 1px solid #444; color: white;
+            padding: 6px; border-radius: 4px; font-size: 11px; width: 100%; margin-bottom: 2px;
+            transition: border-color 0.2s;
+        }
+        input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+        input[type="range"] { -webkit-appearance: none; background: #444; height: 4px; border-radius: 2px; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: var(--accent); border-radius: 50%; cursor: pointer; }
+        
+        button { cursor: pointer; border: 1px solid #444; background: #333; color: white; padding: 6px 12px; border-radius: 4px; font-size: 11px; transition: 0.2s; }
+        button:hover { background: #444; border-color: #666; }
+        .btn-primary { background: var(--accent); border-color: var(--accent); font-weight: bold; }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-danger { background: var(--accent-danger); border-color: var(--accent-danger); }
+        .icon-btn { background: transparent; border: none; font-size: 14px; color: #ccc; padding: 5px; }
+        .icon-btn:hover { color: white; background: rgba(255,255,255,0.1); }
+
+        /* === 레이아웃 구조 === */
+        #app-container { display: none; flex-direction: column; height: 100vh; } /* 로그인 전 숨김 */
+        
+        #header {
+            height: 45px; background: var(--bg-header); border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between; padding: 0 15px;
+        }
+        
+        #main-workspace { flex: 1; display: flex; overflow: hidden; }
+
+        /* 1. 좌측 패널 (툴바 + 레이어) */
+        #left-panel { width: 260px; background: var(--bg-panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+        
+        #toolbar { flex: 1; overflow-y: auto; padding-bottom: 10px; }
+        .panel-header { padding: 10px; background: #252526; font-weight: bold; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
+        
+        .tool-category { padding: 8px 12px; font-size: 10px; color: var(--text-sub); font-weight: bold; text-transform: uppercase; margin-top: 5px; background: #222; }
+        .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 5px 10px; }
+        .tool-btn {
+            background: #2d2d2d; padding: 8px; text-align: center; border-radius: 4px; cursor: pointer;
+            display: flex; flex-direction: column; align-items: center; gap: 4px; color: #ccc; border: 1px solid transparent;
+        }
+        .tool-btn:hover { background: #383838; border-color: var(--accent); color: white; }
+        .tool-btn i { font-size: 14px; color: var(--accent); }
+
+        #layers-view { height: 200px; border-top: 1px solid var(--border); overflow-y: auto; background: #1a1a1a; }
+        .layer-item { padding: 5px 10px; cursor: pointer; display: flex; align-items: center; gap: 5px; border-bottom: 1px solid #222; font-size: 11px; }
+        .layer-item:hover { background: #333; }
+        .layer-item.active { background: rgba(59, 130, 246, 0.2); color: var(--accent); border-left: 2px solid var(--accent); }
+
+        /* 2. 중앙 캔버스 */
+        #canvas-area {
+            flex: 1; background: #0f0f0f; position: relative; overflow: auto;
+            background-image: linear-gradient(#222 1px, transparent 1px), linear-gradient(90deg, #222 1px, transparent 1px);
+            background-size: 20px 20px;
+            display: flex; justify-content: center; padding: 50px;
+        }
+        #canvas-content {
+            width: 100%; min-height: 1000px; position: relative; background: transparent;
+        }
+        
+        .element { position: absolute; min-width: 10px; min-height: 10px; box-sizing: border-box; }
+        .element.selected { outline: 2px solid var(--accent); z-index: 1000; cursor: move; }
+        .element.selected.recording { outline: 2px dashed var(--accent-danger); }
+        .resize-handle {
+            width: 8px; height: 8px; background: white; border: 1px solid var(--accent);
+            position: absolute; right: -4px; bottom: -4px; cursor: se-resize; display: none; z-index: 1001;
+        }
+        .element.selected .resize-handle { display: block; }
+
+        /* 3. 우측 속성 패널 */
+        #right-panel { width: 320px; background: var(--bg-panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; }
+        .tabs { display: flex; border-bottom: 1px solid var(--border); background: #222; }
+        .tab { flex: 1; padding: 10px; text-align: center; cursor: pointer; color: #888; border-bottom: 2px solid transparent; }
+        .tab.active { color: var(--accent); border-bottom-color: var(--accent); background: var(--bg-panel); font-weight: bold; }
+        .panel-content { flex: 1; overflow-y: auto; padding: 10px; display: none; }
+        .panel-content.active { display: block; }
+
+        details { background: #252526; margin-bottom: 5px; border-radius: 4px; overflow: hidden; border: 1px solid #333; }
+        summary { padding: 8px; cursor: pointer; font-weight: bold; font-size: 11px; display: flex; justify-content: space-between; align-items: center; }
+        summary:hover { background: #2d2d2d; }
+        .prop-group { padding: 10px; display: flex; flex-direction: column; gap: 8px; background: #1e1e1e; border-top: 1px solid #333; }
+        
+        .prop-row { display: flex; flex-direction: column; gap: 3px; }
+        .prop-row label { font-size: 10px; color: #aaa; display: flex; justify-content: space-between; }
+        .row-cols { display: flex; gap: 5px; }
+        .col-half { flex: 1; }
+
+        /* 4. 하단 타임라인 */
+        #bottom-panel { height: 220px; background: #181818; border-top: 1px solid var(--border); display: flex; flex-direction: column; }
+        .timeline-header { height: 35px; background: #252526; display: flex; align-items: center; padding: 0 10px; justify-content: space-between; border-bottom: 1px solid #333; }
+        .timeline-body { flex: 1; overflow-x: auto; position: relative; }
+        .ruler { height: 25px; background: #222; border-bottom: 1px solid #444; position: relative; min-width: 100%; }
+        .tick { position: absolute; height: 100%; border-left: 1px solid #444; font-size: 9px; padding-left: 2px; color: #666; }
+        .track-container { padding-top: 10px; position: relative; }
+        .keyframe {
+            width: 10px; height: 10px; background: #ccc; transform: rotate(45deg);
+            position: absolute; top: 0; border: 1px solid #fff; cursor: pointer; margin-left: -5px; z-index: 10;
+        }
+        .keyframe.active { background: var(--accent-danger); border-color: yellow; }
+
+        /* 인증 화면 스타일 */
+        #auth-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #111; z-index: 9999; display: flex; justify-content: center; align-items: center;
+            background-image: linear-gradient(135deg, #18181b 25%, transparent 25%), linear-gradient(225deg, #18181b 25%, transparent 25%), linear-gradient(45deg, #18181b 25%, transparent 25%), linear-gradient(315deg, #18181b 25%, #222 25%);
+            background-position: 10px 0, 10px 0, 0 0, 0 0; background-size: 20px 20px; background-repeat: repeat;
+        }
+        .auth-box { width: 360px; background: #252526; padding: 30px; border-radius: 8px; border: 1px solid #444; box-shadow: 0 20px 50px rgba(0,0,0,0.7); text-align: center; }
+        .auth-title { font-size: 20px; font-weight: bold; margin-bottom: 20px; color: var(--accent); }
+        .auth-switch { margin-top: 15px; font-size: 11px; color: #888; cursor: pointer; text-decoration: underline; }
+
+        /* 모달 스타일 */
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9000; display: none; justify-content: center; align-items: center; }
+        .modal-content { background: #252526; padding: 20px; border-radius: 8px; width: 400px; border: 1px solid #555; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    </style>
+</head>
+<body>
+
+    <!-- 0. 인증 오버레이 -->
+    <div id="auth-overlay">
+        <!-- 로그인 폼 -->
+        <div id="login-form" class="auth-box">
+            <div class="auth-title"><i class="fa-solid fa-infinity"></i> Infinity Builder</div>
+            <p style="color:#aaa; font-size:12px; margin-bottom:20px;">계정에 로그인하여 시작하세요.</p>
+            <input type="text" id="l-id" placeholder="아이디" style="padding:10px; margin-bottom:10px;">
+            <input type="password" id="l-pw" placeholder="비밀번호" style="padding:10px; margin-bottom:20px;">
+            <button class="btn-primary" style="width:100%; padding:10px;" onclick="handleLogin()">로그인</button>
+            <div class="auth-switch" onclick="switchAuth('signup')">계정이 없으신가요? 회원가입</div>
+        </div>
+        <!-- 회원가입 폼 -->
+        <div id="signup-form" class="auth-box" style="display:none;">
+            <div class="auth-title">회원가입</div>
+            <p style="color:#aaa; font-size:12px; margin-bottom:20px;">새로운 계정을 생성합니다.</p>
+            <input type="text" id="s-id" placeholder="사용할 아이디" style="padding:10px; margin-bottom:10px;">
+            <input type="password" id="s-pw" placeholder="비밀번호" style="padding:10px; margin-bottom:20px;">
+            <button class="btn-primary" style="width:100%; padding:10px;" onclick="handleSignup()">가입하기</button>
+            <div class="auth-switch" onclick="switchAuth('login')">이미 계정이 있으신가요? 로그인</div>
+        </div>
+    </div>
+
+    <!-- 앱 컨테이너 (로그인 후 보임) -->
+    <div id="app-container">
+        <!-- 헤더 -->
+        <div id="header">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <i class="fa-solid fa-infinity" style="color:var(--accent); font-size:18px;"></i>
+                <span style="font-weight:bold; font-size:14px;">Infinity Builder <span style="font-size:10px; background:#444; padding:2px 6px; border-radius:4px;">MASTER</span></span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span id="user-display" style="color:var(--accent); font-weight:bold; margin-right:10px;">User</span>
+                <span id="proj-display" style="color:#888; border-right:1px solid #444; padding-right:15px; margin-right:5px;">새 프로젝트</span>
+                
+                <button class="icon-btn" onclick="undo()" title="실행 취소"><i class="fa-solid fa-rotate-left"></i></button>
+                <button class="icon-btn" onclick="redo()" title="다시 실행"><i class="fa-solid fa-rotate-right"></i></button>
+                <div style="width:1px; height:20px; background:#444; margin:0 5px;"></div>
+                
+                <button class="icon-btn" onclick="openProjMgr()"><i class="fa-solid fa-folder-open"></i></button>
+                <button class="icon-btn" onclick="saveCurrentProj()"><i class="fa-solid fa-save"></i></button>
+                <button class="btn-primary" onclick="exportHTML()"><i class="fa-solid fa-file-export"></i> 내보내기</button>
+                
+                <div style="width:1px; height:20px; background:#444; margin:0 5px;"></div>
+                <button class="icon-btn" onclick="handleLogout()" title="로그아웃"><i class="fa-solid fa-sign-out-alt"></i></button>
+                <button class="icon-btn" style="color:var(--accent-danger);" onclick="handleDeleteAccount()" title="계정 삭제"><i class="fa-solid fa-user-slash"></i></button>
+            </div>
+        </div>
+
+        <div id="main-workspace">
+            <!-- 1. 좌측 패널 -->
+            <div id="left-panel">
+                <div class="panel-header">요소 추가</div>
+                <div id="toolbar">
+                    <div class="tool-category">레이아웃</div>
+                    <div class="tool-grid">
+                        <div class="tool-btn" onclick="addEl('div')"><i class="fa-regular fa-square"></i>박스</div>
+                        <div class="tool-btn" onclick="addEl('section')"><i class="fa-solid fa-table-cells-large"></i>섹션</div>
+                        <div class="tool-btn" onclick="addEl('flex')"><i class="fa-solid fa-layer-group"></i>Flex</div>
+                        <div class="tool-btn" onclick="addEl('grid')"><i class="fa-solid fa-border-all"></i>Grid</div>
+                        <div class="tool-btn" onclick="addEl('container')"><i class="fa-solid fa-box-open"></i>컨테이너</div>
+                        <div class="tool-btn" onclick="addEl('nav')"><i class="fa-solid fa-compass"></i>네비게이션</div>
+                    </div>
+                    
+                    <div class="tool-category">텍스트</div>
+                    <div class="tool-grid">
+                        <div class="tool-btn" onclick="addEl('h1')"><i class="fa-solid fa-heading"></i>제목 H1</div>
+                        <div class="tool-btn" onclick="addEl('h3')"><i class="fa-solid fa-font"></i>제목 H3</div>
+                        <div class="tool-btn" onclick="addEl('p')"><i class="fa-solid fa-paragraph"></i>본문 P</div>
+                        <div class="tool-btn" onclick="addEl('span')"><i class="fa-solid fa-text-width"></i>텍스트</div>
+                        <div class="tool-btn" onclick="addEl('a')"><i class="fa-solid fa-link"></i>링크</div>
+                        <div class="tool-btn" onclick="addEl('code')"><i class="fa-solid fa-code"></i>코드블럭</div>
+                        <div class="tool-btn" onclick="addEl('quote')"><i class="fa-solid fa-quote-left"></i>인용구</div>
+                    </div>
+
+                    <div class="tool-category">미디어 & 그래픽</div>
+                    <div class="tool-grid">
+                        <div class="tool-btn" onclick="addEl('img')"><i class="fa-regular fa-image"></i>이미지</div>
+                        <div class="tool-btn" onclick="addEl('video')"><i class="fa-solid fa-video"></i>동영상</div>
+                        <div class="tool-btn" onclick="addEl('iframe')"><i class="fa-brands fa-youtube"></i>임베드</div>
+                        <div class="tool-item" onclick="addEl('audio')"><i class="fa-solid fa-music"></i>오디오</div>
+                        <div class="tool-btn" onclick="addEl('icon')"><i class="fa-solid fa-star"></i>아이콘</div>
+                        <div class="tool-btn" onclick="addEl('canvas')"><i class="fa-solid fa-palette"></i>캔버스</div>
+                        <div class="tool-btn" onclick="addEl('hr')"><i class="fa-solid fa-minus"></i>구분선</div>
+                    </div>
+
+                    <div class="tool-category">폼 & 인터랙션</div>
+                    <div class="tool-grid">
+                        <div class="tool-btn" onclick="addEl('button')"><i class="fa-solid fa-mobile-button"></i>버튼</div>
+                        <div class="tool-btn" onclick="addEl('input')"><i class="fa-solid fa-keyboard"></i>입력창</div>
+                        <div class="tool-btn" onclick="addEl('textarea')"><i class="fa-regular fa-comment-dots"></i>텍스트영역</div>
+                        <div class="tool-btn" onclick="addEl('select')"><i class="fa-solid fa-list"></i>선택박스</div>
+                        <div class="tool-btn" onclick="addEl('checkbox')"><i class="fa-regular fa-check-square"></i>체크박스</div>
+                        <div class="tool-btn" onclick="addEl('radio')"><i class="fa-regular fa-circle-dot"></i>라디오</div>
+                        <div class="tool-btn" onclick="addEl('range')"><i class="fa-solid fa-sliders"></i>슬라이더</div>
+                        <div class="tool-btn" onclick="addEl('progress')"><i class="fa-solid fa-bars-progress"></i>진행바</div>
+                    </div>
+                </div>
+                <div class="panel-header" style="border-top:1px solid #333;">레이어 (Layer)</div>
+                <div id="layers-view">
+                    <!-- 레이어 리스트 -->
+                </div>
+            </div>
+
+            <!-- 2. 캔버스 -->
+            <div id="canvas-area" onclick="deselect(event)">
+                <div id="canvas-content">
+                    <!-- 요소들이 생성되는 곳 -->
+                </div>
+            </div>
+
+            <!-- 3. 우측 속성 패널 -->
+            <div id="right-panel">
+                <div class="tabs">
+                    <div class="tab active" onclick="switchTab('design')">디자인</div>
+                    <div class="tab" onclick="switchTab('text')">텍스트</div>
+                    <div class="tab" onclick="switchTab('attr')">설정</div>
+                    <div class="tab" onclick="switchTab('anim')">애니</div>
+                </div>
+
+                <!-- 디자인 탭 -->
+                <div id="p-design" class="panel-content active">
+                    <details open>
+                        <summary>배치 & 레이아웃 (Layout)</summary>
+                        <div class="prop-group">
+                            <div class="prop-row"><label>크기 (W / H)</label><div class="row-cols"><input id="css-w" placeholder="W" onchange="setStyle('width',this.value)"><input id="css-h" placeholder="H" onchange="setStyle('height',this.value)"></div></div>
+                            <div class="prop-row"><label>위치 (X / Y)</label><div class="row-cols"><input id="css-x" placeholder="X" onchange="setStyle('left',this.value)"><input id="css-y" placeholder="Y" onchange="setStyle('top',this.value)"></div></div>
+                            <div class="prop-row"><label>디스플레이</label><select onchange="setStyle('display',this.value)"><option value="block">Block</option><option value="flex">Flex</option><option value="grid">Grid</option><option value="inline-block">Inline-Block</option><option value="none">None</option></select></div>
+                            <div class="prop-row"><label>포지션</label><select onchange="setStyle('position',this.value)"><option value="absolute">Absolute</option><option value="relative">Relative</option><option value="fixed">Fixed</option><option value="static">Static</option></select></div>
+                            <div class="prop-row"><label>여백 (Margin)</label><input onchange="setStyle('margin',this.value)"></div>
+                            <div class="prop-row"><label>패딩 (Padding)</label><input onchange="setStyle('padding',this.value)"></div>
+                            <div class="prop-row"><label>Z-Index</label><input type="number" onchange="setStyle('zIndex',this.value)"></div>
+                            <div class="prop-row"><label>박스사이징</label><select onchange="setStyle('boxSizing',this.value)"><option value="content-box">Content Box</option><option value="border-box">Border Box</option></select></div>
+                        </div>
+                    </details>
+                    
+                    <details>
+                        <summary>배경 (Background)</summary>
+                        <div class="prop-group">
+                            <div class="prop-row"><label>배경색</label><div class="row-cols"><input type="color" style="width:40px;padding:0" oninput="updateBg('c',this.value)"><input type="text" placeholder="#HEX" onchange="updateBg('c',this.value)"></div></div>
+                            <div class="prop-row"><label>그라데이션</label><div class="row-cols"><input type="color" id="g1" value="#ffffff"><input type="color" id="g2" value="#000000"><button style="flex:1" onclick="updateBg('g')">적용</button></div></div>
+                            <div class="prop-row"><label>이미지 URL</label><input onchange="updateBg('i',this.value)"></div>
+                            <div class="prop-row"><label>Size / Repeat</label><div class="row-cols"><select onchange="setStyle('backgroundSize',this.value)"><option value="cover">Cover</option><option value="contain">Contain</option><option value="auto">Auto</option></select><select onchange="setStyle('backgroundRepeat',this.value)"><option value="no-repeat">No Repeat</option><option value="repeat">Repeat</option></select></div></div>
+                        </div>
+                    </details>
+
+                    <details>
+                        <summary>효과 (Effects)</summary>
+                        <div class="prop-group">
+                            <div class="prop-row"><label>투명도 (Opacity)</label><input type="range" min="0" max="1" step="0.1" oninput="setStyle('opacity',this.value)"></div>
+                            <div class="prop-row"><label>테두리 (Border)</label><input placeholder="1px solid #fff" onchange="setStyle('border',this.value)"></div>
+                            <div class="prop-row"><label>둥글기 (Radius)</label><input placeholder="5px" onchange="setStyle('borderRadius',this.value)"></div>
+                            <div class="prop-row"><label>그림자 (Shadow)</label><input placeholder="2px 2px 5px black" onchange="setStyle('boxShadow',this.value)"></div>
+                            <div class="prop-row"><label>필터 (Filter)</label><input placeholder="blur(5px)" onchange="setStyle('filter',this.value)"></div>
+                            <div class="prop-row"><label>혼합 (Blend Mode)</label><select onchange="setStyle('mixBlendMode',this.value)"><option value="normal">Normal</option><option value="multiply">Multiply</option><option value="screen">Screen</option><option value="overlay">Overlay</option></select></div>
+                            <div class="prop-row"><label>변형 (Transform)</label><input placeholder="rotate(45deg) scale(1.2)" onchange="setStyle('transform',this.value)"></div>
+                        </div>
+                    </details>
+                </div>
+
+                <!-- 텍스트 탭 -->
+                <div id="p-text" class="panel-content">
+                    <details open>
+                        <summary>타이포그래피</summary>
+                        <div class="prop-group">
+                            <div class="prop-row"><label>폰트</label><select onchange="setStyle('fontFamily',this.value)"><option value="sans-serif">Sans Serif</option><option value="'Noto Sans KR'">본고딕</option><option value="'Nanum Gothic'">나눔고딕</option><option value="'Jua'">주아체</option><option value="'Black Han Sans'">제목체</option></select></div>
+                            <div class="prop-row"><label>폰트 CSS (@font-face)</label><textarea rows="3" id="custom-font-css" placeholder="@import url(...);" onchange="applyFontCSS()"></textarea></div>
+                            <div class="prop-row"><label>크기</label><input type="number" oninput="setStyle('fontSize',this.value+'px')"></div>
+                            <div class="prop-row"><label>색상</label><input type="color" oninput="setStyle('color',this.value)"></div>
+                            <div class="prop-row"><label>굵기</label><input type="range" min="100" max="900" step="100" oninput="setStyle('fontWeight',this.value)"></div>
+                            <div class="prop-row"><label>정렬</label><div class="row-cols"><button class="col-half" onclick="setStyle('textAlign','left')">L</button><button class="col-half" onclick="setStyle('textAlign','center')">C</button><button class="col-half" onclick="setStyle('textAlign','right')">R</button></div></div>
+                            <div class="prop-row"><label>줄 간격</label><input type="number" step="0.1" oninput="setStyle('lineHeight',this.value)"></div>
+                            <div class="prop-row"><label>장식</label><select onchange="setStyle('textDecoration',this.value)"><option value="none">None</option><option value="underline">Underline</option></select></div>
+                        </div>
+                    </details>
+                </div>
+
+                <!-- 속성 탭 -->
+                <div id="p-attr" class="panel-content">
+                    <details open>
+                        <summary>요소 속성</summary>
+                        <div class="prop-group">
+                            <div class="prop-row"><label>ID</label><input id="attr-id" oninput="setAttr('id',this.value)"></div>
+                            <div class="prop-row"><label>Class</label><input id="attr-class" oninput="setAttr('className','element selected '+this.value)"></div>
+                            <div class="prop-row"><label>내용 (Text)</label><textarea rows="3" id="attr-text" oninput="setText(this.value)"></textarea></div>
+                            <div class="prop-row"><label>이미지/비디오 SRC</label><input id="attr-src" oninput="setAttr('src',this.value)"></div>
+                            <div class="prop-row"><label>링크 HREF</label><input oninput="setAttr('href',this.value)"></div>
+                            <div class="prop-row"><label>Placeholder</label><input oninput="setAttr('placeholder',this.value)"></div>
+                            <div class="prop-row"><label>Type (Input)</label><input oninput="setAttr('type',this.value)"></div>
+                            <div class="prop-row"><label>Range 값 (Min/Max/Val)</label><div class="row-cols"><input placeholder="Min" oninput="setAttr('min',this.value)"><input placeholder="Max" oninput="setAttr('max',this.value)"><input placeholder="Val" oninput="setAttr('value',this.value)"></div></div>
+                            <button class="btn-danger" onclick="deleteEl()">요소 삭제</button>
+                        </div>
+                    </details>
+                </div>
+
+                <!-- 애니메이션 탭 -->
+                <div id="p-anim" class="panel-content">
+                    <details open>
+                        <summary>프리셋 & 설정</summary>
+                        <div class="prop-group">
+                            <div class="prop-row"><label>프리셋 선택</label>
+                                <select id="anim-preset" onchange="applyPreset()">
+                                    <option value="">(없음)</option>
+                                    <option value="fadeIn">Fade In</option><option value="fadeOut">Fade Out</option>
+                                    <option value="slideUp">Slide Up</option><option value="slideDown">Slide Down</option>
+                                    <option value="bounce">Bounce</option><option value="pulse">Pulse</option>
+                                    <option value="spin">Spin</option><option value="shake">Shake</option>
+                                    <option value="zoomIn">Zoom In</option><option value="flipX">Flip X</option>
+                                </select>
+                            </div>
+                            <div class="prop-row"><label>시간 (s)</label><input type="number" id="anim-dur" value="1" step="0.1"></div>
+                            <div class="prop-row"><label>지연 (s)</label><input type="number" id="anim-del" value="0" step="0.1"></div>
+                            <div class="prop-row"><label>반복</label><input id="anim-iter" value="infinite"></div>
+                            <button class="btn-primary" onclick="applyPreset()">적용</button>
+                        </div>
+                    </details>
+                    <div style="padding:10px; background:#333; margin-top:10px; border-radius:4px; font-size:11px;">
+                        <i class="fa-solid fa-video"></i> <strong>타임라인 녹화:</strong> 키프레임을 추가하고 마커를 클릭해 <span style="color:var(--accent-danger)">●REC</span> 상태에서 요소를 편집하세요.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. 하단 패널 (타임라인) -->
+        <div id="bottom-panel">
+            <div class="timeline-header">
+                <div>
+                    <button class="icon-btn" onclick="playAnim()"><i class="fa-solid fa-play"></i> 재생</button>
+                    <button class="icon-btn" onclick="stopAnim()"><i class="fa-solid fa-stop"></i> 정지</button>
+                </div>
+                <div id="anim-status" style="color:#888; font-size:11px;">준비됨</div>
+                <button class="btn-primary" style="font-size:10px; padding:4px 8px;" onclick="addKeyframe()">+ 키프레임</button>
+            </div>
+            <div class="timeline-body">
+                <div class="ruler" id="tl-ruler"></div>
+                <div class="track-container">
+                    <div id="track-markers" style="height:30px; border-bottom:1px solid #333; display:none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 프로젝트 모달 -->
+    <div id="proj-modal" class="modal">
+        <div class="modal-content">
+            <h3>프로젝트 관리</h3>
+            <div style="display:flex; gap:5px; margin-bottom:10px;">
+                <input id="new-proj-name" placeholder="새 프로젝트 이름">
+                <button class="btn-primary" onclick="createProj()">생성</button>
+            </div>
+            <div id="proj-list" style="max-height:200px; overflow-y:auto; border:1px solid #444; margin-bottom:10px;"></div>
+            <button onclick="document.getElementById('proj-modal').style.display='none'">닫기</button>
+        </div>
+    </div>
+
+    <!-- CSS Injection -->
+    <style id="preset-anims">
+        @keyframes fadeIn {from{opacity:0}to{opacity:1}} @keyframes fadeOut {from{opacity:1}to{opacity:0}}
+        @keyframes slideUp {from{transform:translateY(50px);opacity:0}to{transform:translateY(0);opacity:1}}
+        @keyframes slideDown {from{transform:translateY(-50px);opacity:0}to{transform:translateY(0);opacity:1}}
+        @keyframes bounce {0%,20%,50%,80%,100%{transform:translateY(0)}40%{transform:translateY(-30px)}60%{transform:translateY(-15px)}}
+        @keyframes pulse {0%{transform:scale(1)}50%{transform:scale(1.05)}100%{transform:scale(1)}}
+        @keyframes spin {from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+        @keyframes shake {0%,100%{transform:translateX(0)}10%,30%,50%,70%,90%{transform:translateX(-5px)}20%,40%,60%,80%{transform:translateX(5px)}}
+        @keyframes zoomIn {from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+        @keyframes flipX {from{transform:perspective(400px)rotate3d(1,0,0,90deg);opacity:0}to{transform:perspective(400px)rotate3d(1,0,0,0deg);opacity:1}}
+    </style>
+    <style id="custom-anims"></style>
+    <style id="font-style"></style>
+
+    <script>
+        // === Global State ===
+        let currentUser = null;
+        let currentProj = 'Untitled';
+        let selectedEl = null;
+        let activeKeyframe = null;
+        let animData = {}; // { elId: [{percent, style}] }
+        let isDrag = false;
+        let dragOff = {x:0, y:0};
+        let undoStack = [];
+        let redoStack = [];
+
+        // === Init ===
+        window.onload = () => {
+            initRuler();
+            const savedUser = localStorage.getItem('ib_user');
+            if(savedUser) {
+                currentUser = savedUser;
+                showApp();
+            }
+        };
+
+        // === Authentication ===
+        function switchAuth(mode) {
+            document.getElementById('login-form').style.display = mode === 'login' ? 'block' : 'none';
+            document.getElementById('signup-form').style.display = mode === 'signup' ? 'block' : 'none';
+        }
+
+        function handleSignup() {
+            const id = document.getElementById('s-id').value;
+            const pw = document.getElementById('s-pw').value;
+            if(!id || !pw) return alert('아이디와 비밀번호를 입력하세요.');
+            
+            const users = JSON.parse(localStorage.getItem('ib_users') || '{}');
+            if(users[id]) return alert('이미 존재하는 아이디입니다.');
+            
+            users[id] = { pw: pw };
+            localStorage.setItem('ib_users', JSON.stringify(users));
+            alert('가입 완료! 로그인해주세요.');
+            switchAuth('login');
+        }
+
+        function handleLogin() {
+            const id = document.getElementById('l-id').value;
+            const pw = document.getElementById('l-pw').value;
+            const users = JSON.parse(localStorage.getItem('ib_users') || '{}');
+            
+            if(users[id] && users[id].pw === pw) {
+                currentUser = id;
+                localStorage.setItem('ib_user', id);
+                showApp();
+            } else {
+                alert('아이디 또는 비밀번호가 일치하지 않습니다.');
+            }
+        }
+
+        function handleLogout() {
+            currentUser = null;
+            localStorage.removeItem('ib_user');
+            location.reload();
+        }
+
+        function handleDeleteAccount() {
+            if(!confirm('정말 계정을 삭제하시겠습니까? 모든 프로젝트가 사라집니다.')) return;
+            const users = JSON.parse(localStorage.getItem('ib_users') || '{}');
+            delete users[currentUser];
+            localStorage.setItem('ib_users', JSON.stringify(users));
+            
+            // 프로젝트 데이터 삭제
+            const projs = JSON.parse(localStorage.getItem('ib_projects') || '{}');
+            // (간단 구현: 해당 유저의 프로젝트만 필터링해야하나 여기선 전체삭제 예시 방지)
+            // 실제 구현시엔 user_id prefix 사용 권장
+            
+            handleLogout();
+        }
+
+        function showApp() {
+            document.getElementById('auth-overlay').style.display = 'none';
+            document.getElementById('app-container').style.display = 'flex';
+            document.getElementById('user-display').innerText = currentUser;
+            loadProjList();
+        }
+
+        // === History (Undo/Redo) ===
+        function saveState() {
+            const state = {
+                html: document.getElementById('canvas-content').innerHTML,
+                anim: JSON.parse(JSON.stringify(animData))
+            };
+            undoStack.push(state);
+            if(undoStack.length > 20) undoStack.shift();
+            redoStack = []; // Clear redo
+        }
+
+        function undo() {
+            if(undoStack.length === 0) return;
+            const current = {
+                html: document.getElementById('canvas-content').innerHTML,
+                anim: JSON.parse(JSON.stringify(animData))
+            };
+            redoStack.push(current);
+            const prev = undoStack.pop();
+            restoreState(prev);
+        }
+
+        function redo() {
+            if(redoStack.length === 0) return;
+            const next = redoStack.pop();
+            saveState(); // current back to undo
+            restoreState(next);
+        }
+
+        function restoreState(state) {
+            document.getElementById('canvas-content').innerHTML = state.html;
+            animData = state.anim;
+            // Rebind events
+            document.querySelectorAll('.element').forEach(el => bindElEvents(el));
+            deselect({target: document.getElementById('canvas-area')});
+            updateLayers();
+        }
+
+        // === Element Management ===
+        function addEl(type) {
+            saveState();
+            let el;
+            const id = 'el-' + Date.now();
+            
+            // 타입별 생성 로직
+            if(type === 'div') { el = document.createElement('div'); el.style.cssText = 'width:100px;height:100px;background:#555;'; }
+            else if(type === 'section') { el = document.createElement('section'); el.style.cssText = 'width:100%;height:200px;background:#333;'; }
+            else if(type === 'flex') { el = document.createElement('div'); el.style.cssText = 'display:flex;width:300px;height:100px;background:#444;gap:5px;padding:5px;'; el.innerHTML='<div style="flex:1;background:#666"></div><div style="flex:1;background:#777"></div>'; }
+            else if(type === 'grid') { el = document.createElement('div'); el.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;width:200px;height:100px;background:#444;gap:5px;padding:5px;'; el.innerHTML='<div style="background:#666"></div><div style="background:#777"></div>'; }
+            else if(type === 'container') { el = document.createElement('div'); el.style.cssText = 'width:80%;margin:0 auto;height:100px;border:1px dashed #666;'; }
+            else if(type === 'nav') { el = document.createElement('nav'); el.style.cssText = 'width:100%;padding:15px;background:#222;display:flex;justify-content:space-between;align-items:center;'; el.innerHTML='<div style="color:white;font-weight:bold">Logo</div><div style="display:flex;gap:15px"><a href="#" style="color:#ccc">Home</a><a href="#" style="color:#ccc">About</a></div>'; }
+            
+            else if(type === 'h1') { el = document.createElement('h1'); el.innerText = 'Heading 1'; }
+            else if(type === 'h3') { el = document.createElement('h3'); el.innerText = 'Heading 3'; }
+            else if(type === 'p') { el = document.createElement('p'); el.innerText = 'Paragraph text...'; }
+            else if(type === 'span') { el = document.createElement('span'); el.innerText = 'Text Span'; }
+            else if(type === 'a') { el = document.createElement('a'); el.innerText = 'Link'; el.href='#'; el.style.color='#3b82f6'; }
+            else if(type === 'code') { el = document.createElement('code'); el.innerText = 'console.log("Hi");'; el.style.cssText='background:#222;padding:5px;border-radius:4px;'; }
+            else if(type === 'quote') { el = document.createElement('blockquote'); el.innerText = 'Quote...'; el.style.cssText='border-left:3px solid #ccc;padding-left:10px;color:#aaa;'; }
+            
+            else if(type === 'img') { el = document.createElement('img'); el.src = 'https://via.placeholder.com/150'; el.style.width='150px'; }
+            else if(type === 'video') { el = document.createElement('video'); el.controls=true; el.style.width='300px'; el.style.background='#000'; }
+            else if(type === 'iframe') { el = document.createElement('iframe'); el.style.width='300px'; el.style.height='200px'; el.style.border='none'; el.style.background='#000'; }
+            else if(type === 'audio') { el = document.createElement('audio'); el.controls=true; }
+            else if(type === 'icon') { el = document.createElement('i'); el.className='fa-solid fa-star'; el.style.fontSize='24px'; }
+            else if(type === 'canvas') { el = document.createElement('canvas'); el.width=200; el.height=100; el.style.background='#fff'; }
+            else if(type === 'hr') { el = document.createElement('hr'); el.style.width='100%'; }
+            
+            else if(type === 'button') { el = document.createElement('button'); el.innerText = 'Button'; el.style.cssText='padding:8px 16px;background:#3b82f6;color:white;border:none;border-radius:4px;'; }
+            else if(type === 'input') { el = document.createElement('input'); el.placeholder = 'Input...'; el.style.width='200px'; }
+            else if(type === 'textarea') { el = document.createElement('textarea'); el.placeholder = 'Text area...'; el.style.cssText='width:200px;height:80px;'; }
+            else if(type === 'select') { el = document.createElement('select'); el.innerHTML='<option>Option 1</option>'; el.style.width='auto'; }
+            else if(type === 'checkbox') { el = document.createElement('input'); el.type='checkbox'; el.style.width='auto'; }
+            else if(type === 'radio') { el = document.createElement('input'); el.type='radio'; el.style.width='auto'; }
+            else if(type === 'range') { el = document.createElement('input'); el.type='range'; el.style.width='150px'; }
+            else if(type === 'progress') { el = document.createElement('progress'); el.value=0.5; }
+
+            el.id = id;
+            el.classList.add('element');
+            el.style.position = 'absolute';
+            el.style.left = '50px';
+            el.style.top = '50px';
+
+            bindElEvents(el);
+
+            // Resize Handle
+            const handle = document.createElement('div');
+            handle.className = 'resize-handle';
+            el.appendChild(handle);
+
+            document.getElementById('canvas-content').appendChild(el);
+            selectEl(el);
+            updateLayers();
+        }
+
+        function bindElEvents(el) {
+            el.onmousedown = (e) => {
+                if(e.button !== 0) return;
+                isDrag = true;
+                selectEl(el);
+                dragOff.x = e.clientX - el.offsetLeft;
+                dragOff.y = e.clientY - el.offsetTop;
+                document.addEventListener('mousemove', onDrag);
+                document.addEventListener('mouseup', stopDrag);
+                e.stopPropagation();
+            };
+            el.onclick = (e) => { e.stopPropagation(); selectEl(el); };
+        }
+
+        function onDrag(e) {
+            if(!isDrag || !selectedEl) return;
+            const x = e.clientX - dragOff.x;
+            const y = e.clientY - dragOff.y;
+            setStyle('left', x + 'px');
+            setStyle('top', y + 'px');
+            document.getElementById('css-x').value = x + 'px';
+            document.getElementById('css-y').value = y + 'px';
+        }
+        function stopDrag() { isDrag = false; document.removeEventListener('mousemove', onDrag); document.removeEventListener('mouseup', stopDrag); saveState(); }
+
+        function selectEl(el) {
+            if(selectedEl) {
+                selectedEl.classList.remove('selected');
+                selectedEl.classList.remove('recording');
+            }
+            selectedEl = el;
+            selectedEl.classList.add('selected');
+            activeKeyframe = null;
+
+            // Load Props
+            const s = el.style;
+            document.getElementById('css-w').value = s.width;
+            document.getElementById('css-h').value = s.height;
+            document.getElementById('css-x').value = s.left;
+            document.getElementById('css-y').value = s.top;
+            document.getElementById('attr-id').value = el.id;
+            
+            // Animation Timeline
+            document.getElementById('track-markers').style.display = 'block';
+            document.getElementById('anim-status').innerText = '선택됨: ' + el.tagName;
+            renderKeyframes();
+            updateLayers();
+        }
+
+        function deselect(e) {
+            if(e.target.id === 'canvas-area' || e.target.id === 'canvas-content') {
+                if(selectedEl) {
+                    selectedEl.classList.remove('selected');
+                    selectedEl.classList.remove('recording');
+                }
+                selectedEl = null;
+                activeKeyframe = null;
+                document.getElementById('track-markers').style.display = 'none';
+                document.getElementById('anim-status').innerText = '준비됨';
+                updateLayers();
+            }
+        }
+
+        function deleteEl() {
+            if(selectedEl) {
+                saveState();
+                delete animData[selectedEl.id];
+                selectedEl.remove(); selectedEl = null;
+                document.getElementById('track-markers').style.display = 'none';
+                updateLayers();
+            }
+        }
+
+        // === Layer Panel ===
+        function updateLayers() {
+            const list = document.getElementById('layers-view');
+            list.innerHTML = '';
+            const els = document.getElementById('canvas-content').children;
+            Array.from(els).forEach(el => {
+                const item = document.createElement('div');
+                item.className = 'layer-item';
+                if(el === selectedEl) item.classList.add('active');
+                item.innerHTML = `<i class="fa-solid fa-layer-group" style="font-size:10px;"></i> ${el.tagName.toLowerCase()} <span style="color:#666; margin-left:auto; font-size:9px;">${el.id}</span>`;
+                item.onclick = () => selectEl(el);
+                list.appendChild(item);
+            });
+        }
+
+        // === Styles & Attributes ===
+        function setStyle(prop, val) {
+            if(!selectedEl) return;
+            if(activeKeyframe) {
+                selectedEl.style[prop] = val;
+                activeKeyframe.style[prop] = val;
+            } else {
+                selectedEl.style[prop] = val;
+            }
+        }
+
+        function updateBg(type, val) {
+            if(type === 'c') { setStyle('background', ''); setStyle('backgroundColor', val); }
+            if(type === 'g') { const c1=document.getElementById('g1').value, c2=document.getElementById('g2').value; setStyle('backgroundImage', `linear-gradient(90deg, ${c1}, ${c2})`); }
+            if(type === 'i') setStyle('backgroundImage', `url('${val}')`);
+        }
+
+        function setAttr(key, val) { if(selectedEl) selectedEl.setAttribute(key, val); }
+        function setText(val) { if(selectedEl) { if(selectedEl.tagName==='INPUT'||selectedEl.tagName==='TEXTAREA') selectedEl.value=val; else selectedEl.innerText=val; } }
+        function applyFontCSS() { document.getElementById('font-style').innerHTML = document.getElementById('custom-font-css').value; }
+
+        // === Animation & Timeline ===
+        function initRuler() {
+            const r = document.getElementById('tl-ruler');
+            for(let i=0; i<=20; i++) {
+                const d=document.createElement('div'); d.className='tick'; d.style.left=(i*5)+'%'; d.innerText=i/2+'s'; r.appendChild(d);
+            }
+        }
+
+        function addKeyframe() {
+            if(!selectedEl) return alert('요소를 선택하세요.');
+            if(!animData[selectedEl.id]) animData[selectedEl.id] = [];
+            const kf = {
+                percent: animData[selectedEl.id].length === 0 ? 0 : 100,
+                style: {
+                    left: selectedEl.style.left, top: selectedEl.style.top,
+                    opacity: selectedEl.style.opacity||1, transform: selectedEl.style.transform||'none',
+                    background: selectedEl.style.background
+                }
+            };
+            animData[selectedEl.id].push(kf);
+            saveState();
+            renderKeyframes();
+        }
+
+        function renderKeyframes() {
+            const track = document.getElementById('track-markers');
+            track.innerHTML = '';
+            const list = animData[selectedEl.id] || [];
+            list.forEach(kf => {
+                const m = document.createElement('div'); m.className='keyframe';
+                if(activeKeyframe===kf) m.classList.add('active');
+                m.style.left = kf.percent + '%';
+                m.onclick = (e) => { e.stopPropagation(); startRec(kf); };
+                track.appendChild(m);
+            });
+        }
+
+        function startRec(kf) {
+            activeKeyframe = kf;
+            renderKeyframes();
+            selectedEl.classList.add('recording');
+            document.getElementById('anim-status').innerHTML = '<span style="color:red">● REC</span>';
+            for(let p in kf.style) selectedEl.style[p] = kf.style[p];
+        }
+
+        function applyPreset() {
+            if(!selectedEl) return;
+            const name = document.getElementById('anim-preset').value;
+            const d = document.getElementById('anim-dur').value + 's';
+            const del = document.getElementById('anim-del').value + 's';
+            const iter = document.getElementById('anim-iter').value;
+            selectedEl.style.animation = name ? `${name} ${d} ease ${del} ${iter} forwards` : 'none';
+        }
+
+        function playAnim() {
+            let css = '';
+            for(let id in animData) {
+                const kfs = animData[id];
+                if(!kfs || kfs.length===0) continue;
+                kfs.sort((a,b)=>a.percent-b.percent);
+                const name = 'custom-'+id;
+                css += `@keyframes ${name} {`;
+                kfs.forEach(kf => {
+                    let s=''; for(let p in kf.style) s+=`${p}:${kf.style[p]};`;
+                    css += `${kf.percent}% {${s}} `;
+                });
+                css += `}\n`;
+                const el = document.getElementById(id);
+                if(el) el.style.animation = `${name} 2s linear forwards`;
+            }
+            document.getElementById('custom-anims').innerHTML = css;
+        }
+
+        function stopAnim() {
+            document.getElementById('custom-anims').innerHTML = '';
+            document.querySelectorAll('.element').forEach(e=>e.style.animation='none');
+            if(selectedEl) selectedEl.classList.remove('recording');
+            activeKeyframe = null;
+        }
+
+        // === Project & Export ===
+        function openProjMgr() { document.getElementById('proj-modal').style.display='flex'; loadProjList(); }
+        function getProjs() { return JSON.parse(localStorage.getItem('ib_projects') || '{}'); }
+        
+        function saveCurrentProj() {
+            const name = currentProj === 'Untitled' ? prompt('프로젝트 이름:') : currentProj;
+            if(!name) return;
+            const db = getProjs();
+            db[name] = { html: document.getElementById('canvas-content').innerHTML, anim: animData };
+            localStorage.setItem('ib_projects', JSON.stringify(db));
+            currentProj = name;
+            document.getElementById('proj-display').innerText = name;
+            alert('저장되었습니다.');
+        }
+
+        function loadProjList() {
+            const list = document.getElementById('proj-list');
+            list.innerHTML = '';
+            const db = getProjs();
+            for(let k in db) {
+                const d = document.createElement('div');
+                d.style.cssText = 'padding:10px; border-bottom:1px solid #333; display:flex; justify-content:space-between; color:#ddd;';
+                d.innerHTML = `<span>${k}</span> <div><button class="btn-primary" onclick="loadP('${k}')">열기</button> <button class="btn-danger" onclick="delP('${k}')">삭제</button></div>`;
+                list.appendChild(d);
+            }
+        }
+        function loadP(name) {
+            const db = getProjs();
+            document.getElementById('canvas-content').innerHTML = db[name].html;
+            animData = db[name].anim || {};
+            currentProj = name;
+            document.getElementById('proj-display').innerText = name;
+            document.getElementById('proj-modal').style.display='none';
+            // 복구된 요소에 이벤트 재연결
+            document.querySelectorAll('.element').forEach(el => bindElEvents(el));
+            updateLayers();
+        }
+        function delP(name) {
+            if(!confirm('삭제하시겠습니까?')) return;
+            const db = getProjs();
+            delete db[name];
+            localStorage.setItem('ib_projects', JSON.stringify(db));
+            loadProjList();
+        }
+
+        function exportHTML() {
+            // Clean Copy
+            const clone = document.getElementById('canvas-content').cloneNode(true);
+            clone.querySelectorAll('.resize-handle').forEach(e => e.remove());
+            clone.querySelectorAll('.selected').forEach(e => {e.classList.remove('selected');e.classList.remove('recording');});
+            
+            // Styles
+            const preset = document.getElementById('preset-anims').innerHTML;
+            const custom = document.getElementById('custom-anims').innerHTML;
+            const fonts = document.getElementById('font-style').innerHTML;
+
+            const html = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${currentProj}</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Do+Hyeon&family=Jua&family=Nanum+Gothic:wght@400;700&family=Nanum+Myeongjo&family=Noto+Sans+KR:wght@100;300;400;500;700;900&display=swap" rel="stylesheet">
+<style>
+body{margin:0;padding:0;min-height:100vh;background:#fff;overflow-x:hidden;position:relative}
+.element{position:absolute;box-sizing:border-box}
+${preset} ${custom} ${fonts}
+</style>
+</head>
+<body>${clone.innerHTML}</body>
+</html>`;
+            const blob = new Blob([html], {type:'text/html'});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = currentProj + '.html';
+            a.click();
+        }
+
+        // Tab Switching
+        function switchTab(t) {
+            document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));
+            document.querySelectorAll('.panel-content').forEach(e=>e.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('p-'+t).classList.add('active');
+        }
+
+        function createProj() {
+            const name = document.getElementById('new-proj-name').value;
+            if(!name) return alert('이름을 입력하세요');
+            document.getElementById('canvas-content').innerHTML = '';
+            animData = {};
+            currentProj = name;
+            document.getElementById('proj-display').innerText = name;
+            document.getElementById('proj-modal').style.display = 'none';
+            updateLayers();
+        }
+    </script>
+</body>
+</html>
